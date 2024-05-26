@@ -367,12 +367,9 @@ impl State {
             if old.active_workspace != state.active_workspace {
                 use crate::dispatch::WorkspaceIdentifierWithSpecial;
                 Dispatch::call_async(DispatchType::Workspace(match &state.active_workspace {
-                    WorkspaceType::Regular(name) => WorkspaceIdentifierWithSpecial::Name(name),
+                    WorkspaceType::Regular(name) => WorkspaceIdentifierWithSpecial::Name(name.to_string()),
                     WorkspaceType::Special(opt) => {
-                        WorkspaceIdentifierWithSpecial::Special(match opt {
-                            Some(name) => Some(name),
-                            None => None,
-                        })
+                        WorkspaceIdentifierWithSpecial::Special(opt.as_ref().map(|name| name.to_string()))
                     }
                 }))
                 .await?;
@@ -380,7 +377,7 @@ impl State {
             if old.active_monitor != state.active_monitor {
                 use crate::dispatch::MonitorIdentifier;
                 Dispatch::call_async(DispatchType::FocusMonitor(MonitorIdentifier::Name(
-                    &state.active_monitor,
+                    state.active_monitor.to_string(),
                 )))
                 .await?;
             };
@@ -399,19 +396,16 @@ impl State {
             if old.active_workspace != state.active_workspace {
                 use crate::dispatch::WorkspaceIdentifierWithSpecial;
                 Dispatch::call(DispatchType::Workspace(match &state.active_workspace {
-                    WorkspaceType::Regular(name) => WorkspaceIdentifierWithSpecial::Name(name),
+                    WorkspaceType::Regular(name) => WorkspaceIdentifierWithSpecial::Name(name.to_string()),
                     WorkspaceType::Special(opt) => {
-                        WorkspaceIdentifierWithSpecial::Special(match opt {
-                            Some(name) => Some(name),
-                            None => None,
-                        })
+                        WorkspaceIdentifierWithSpecial::Special(opt.as_ref().map(|name| name.to_string()))
                     }
                 }))?;
             }
             if old.active_monitor != state.active_monitor {
                 use crate::dispatch::MonitorIdentifier;
                 Dispatch::call(DispatchType::FocusMonitor(MonitorIdentifier::Name(
-                    &state.active_monitor,
+                    state.active_monitor.to_string(),
                 )))?;
             };
         }

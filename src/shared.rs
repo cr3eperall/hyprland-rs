@@ -71,6 +71,12 @@ impl From<std::string::FromUtf8Error> for HyprError {
     }
 }
 
+impl From<HyprError> for String {
+        fn from(value: HyprError) -> Self {
+            value.to_string()
+        }
+    }
+
 impl error::Error for HyprError {}
 
 /// Internal macro to return a Hyprland error

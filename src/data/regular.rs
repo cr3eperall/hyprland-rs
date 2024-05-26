@@ -244,6 +244,32 @@ pub struct Client {
     pub focus_history_id: i8,
 }
 
+impl Default for Client {
+        fn default() -> Self {
+            Self {
+                address: Address::new("0x0".to_string()),
+                at: (0,0),
+                size: (0,0),
+                workspace: WorkspaceBasic {id:-1, name: String::new()},
+                floating: false,
+                fullscreen: false,
+                fullscreen_mode: 0,
+                monitor: -1,
+                initial_class: String::new(),
+                class: String::new(),
+                initial_title: String::new(),
+                title: String::new(),
+                pid: 0,
+                xwayland: false,
+                pinned: false,
+                grouped: vec![],
+                mapped: false,
+                swallowing: None,
+                focus_history_id:0
+            }
+        }
+    }
+
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 struct Empty {}

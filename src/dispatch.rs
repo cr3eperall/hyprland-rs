@@ -63,6 +63,19 @@ pub enum Direction {
     Left,
 }
 
+impl std::str::FromStr for Direction {
+        type Err=String;
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            match s {
+                "l" | "left" => Ok(Direction::Left),
+                "r" | "right" => Ok(Direction::Right),
+                "u" | "t" | "up" => Ok(Direction::Up),
+                "d" | "b" | "down" => Ok(Direction::Down),
+                _ => Err(format!("{} is not a valid direction.", s)),
+            }
+        }
+    }
+
 /// This enum is used for resizing and moving windows precisely
 #[derive(Debug, Clone)]
 pub enum Position {
@@ -104,20 +117,20 @@ pub enum WindowSwitchDirection {
 
 /// This enum is used for identifying monitors
 #[derive(Debug, Clone)]
-pub enum MonitorIdentifier<'a> {
+pub enum MonitorIdentifier {
     /// The monitor that is to the specified direction of the active one
     Direction(Direction),
     /// The monitor id
     Id(MonitorId),
     /// The monitor name
-    Name(&'a str),
+    Name(String),
     /// The current monitor
     Current,
     /// The workspace relative to the current workspace
     Relative(i32),
 }
 
-impl std::fmt::Display for MonitorIdentifier<'_> {
+impl std::fmt::Display for MonitorIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let out = match self {
             MonitorIdentifier::Direction(dir) => dir.to_string(),
@@ -129,6 +142,38 @@ impl std::fmt::Display for MonitorIdentifier<'_> {
         write!(f, "{out}")
     }
 }
+
+impl std::str::FromStr for MonitorIdentifier {
+        type Err = String;
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            if let Ok(direction) = Direction::from_str(s) {
+                return Ok(MonitorIdentifier::Direction(direction));
+            } else if s == "current" {
+                return Ok(MonitorIdentifier::Current);
+            } else if let Some(first_char) = s.chars().collect::<Vec<char>>().get(0) {
+                match first_char {
+                    '0'..='9' => {
+                        if let Ok(id) = s.parse::<i128>() {
+                            return Ok(MonitorIdentifier::Id(id));
+                        } else {
+                            return Err(
+                                "Monitor id must be between 0 and 255".to_string()
+                            );
+                        }
+                    }
+                    '+' | '-' => {
+                        if let Ok(num) = s.parse::<i32>() {
+                            return Ok(MonitorIdentifier::Relative(num));
+                        } else {
+                            return Err(format!("{} is an invalid relative monitor id", s));
+                        }
+                    }
+                    _ => return Ok(MonitorIdentifier::Name(s.to_string())),
+                }
+            }
+            Err("".to_string())
+        }
+    }
 
 /// This enum holds corners
 #[allow(missing_docs)]
@@ -152,8 +197,8 @@ pub enum WorkspaceOptions {
 }
 
 /// This enum is for identifying workspaces that also includes the special workspace
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
-pub enum WorkspaceIdentifierWithSpecial<'a> {
+#[derive(Debug, Clone, PartialEq, Eq, Display)]
+pub enum WorkspaceIdentifierWithSpecial {
     /// The workspace Id
     Id(WorkspaceId),
     /// The workspace relative to the current workspace
@@ -176,14 +221,14 @@ pub enum WorkspaceIdentifierWithSpecial<'a> {
     Empty,
     /// The name of the workspace
     #[display(fmt = "name:{_0}")]
-    Name(&'a str),
+    Name(String),
     /// The special workspace
     #[display(fmt = "special{}", "format_special_workspace_ident(_0)")]
-    Special(Option<&'a str>),
+    Special(Option<String>),
 }
 
 #[inline(always)]
-fn format_special_workspace_ident<'a>(opt: &'a Option<&'a str>) -> String {
+fn format_special_workspace_ident<'a>(opt: &'a Option<String>) -> String {
     match opt {
         Some(o) => ":".to_owned() + o,
         None => String::new(),
@@ -191,8 +236,8 @@ fn format_special_workspace_ident<'a>(opt: &'a Option<&'a str>) -> String {
 }
 
 /// This enum is for identifying workspaces
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkspaceIdentifier<'a> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkspaceIdentifier {
     /// The workspace Id
     Id(WorkspaceId),
     /// The workspace relative to the current workspace
@@ -208,10 +253,10 @@ pub enum WorkspaceIdentifier<'a> {
     /// The first available empty workspace
     Empty,
     /// The name of the workspace
-    Name(&'a str),
+    Name(String),
 }
 
-impl std::fmt::Display for WorkspaceIdentifier<'_> {
+impl std::fmt::Display for WorkspaceIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use WorkspaceIdentifier::*;
         let out = match self {
@@ -229,11 +274,210 @@ impl std::fmt::Display for WorkspaceIdentifier<'_> {
     }
 }
 
+impl std::str::FromStr for WorkspaceIdentifier {
+        type Err = String;
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            let default_error:Result<WorkspaceIdentifier, String>= Err(format!("{} is not a valid workspace identifier.",s));
+            match s {
+                "previous" => return Ok(WorkspaceIdentifier::Previous),
+                "empty" => return Ok(WorkspaceIdentifier::Empty),
+                _ => {
+                    if let Some(first_char) = s.chars().collect::<Vec<char>>().get(0) {
+                        match first_char {
+                            '0'..='9' => {
+                                if let Ok(id) = s.parse::<i32>() {
+                                    if id > 0 && id < i32::MAX {
+                                        return Ok(WorkspaceIdentifier::Id(id));
+                                    } else {
+                                        return Err(
+                                            "workspace id must be between 0 and 9223372036854775806"
+                                                .to_string(),
+                                        );
+                                    }
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                            '+' | '-' => {
+                                if let Ok(num) = s.parse::<i32>() {
+                                    return Ok(WorkspaceIdentifier::Relative(num));
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                            'm' => {
+                                if s.len() < 3 {
+                                    return default_error;
+                                }
+                                if let Ok(num) = s[1..].parse::<i32>() {
+                                    return Ok(WorkspaceIdentifier::RelativeMonitor(num));
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                            'r' => {
+                                if s.len() < 3 {
+                                    return default_error;
+                                }
+                                if let Ok(num) = s[1..].parse::<i32>() {
+                                    return Ok(WorkspaceIdentifier::RelativeMonitorIncludingEmpty(num));
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                            'e' => {
+                                if s.len() < 3 {
+                                    return default_error;
+                                }
+                                if let Ok(num) = s[1..].parse::<i32>() {
+                                    return Ok(WorkspaceIdentifier::RelativeOpen(num));
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                            _ => {
+                                if s.starts_with("name:") {
+                                    let name = &s[5..];
+                                    return Ok(WorkspaceIdentifier::Name(name.to_string()));
+                                } else if s.starts_with("special") {
+                                    return Err(String::from("special workspace not supported here"));
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                        }
+                    } else {
+                        return Err("you need to provide a workspace".to_string());
+                    }
+                }
+            }
+        }
+    }
+    
+    impl Into<WorkspaceIdentifierWithSpecial> for &WorkspaceIdentifier {
+        fn into(self) -> WorkspaceIdentifierWithSpecial {
+            match self{
+                        WorkspaceIdentifier::Id(v) => WorkspaceIdentifierWithSpecial::Id(*v),
+                        WorkspaceIdentifier::Relative(v) => WorkspaceIdentifierWithSpecial::Relative(*v),
+                        WorkspaceIdentifier::RelativeMonitor(v) => WorkspaceIdentifierWithSpecial::RelativeMonitor(*v),
+                        WorkspaceIdentifier::RelativeMonitorIncludingEmpty(v) => WorkspaceIdentifierWithSpecial::RelativeMonitorIncludingEmpty(*v),
+                        WorkspaceIdentifier::RelativeOpen(v) => WorkspaceIdentifierWithSpecial::RelativeOpen(*v),
+                        WorkspaceIdentifier::Previous => WorkspaceIdentifierWithSpecial::Previous,
+                        WorkspaceIdentifier::Empty => WorkspaceIdentifierWithSpecial::Empty,
+                        WorkspaceIdentifier::Name(v) => WorkspaceIdentifierWithSpecial::Name(v.clone()),
+                    }
+        }
+    }
+
+impl std::str::FromStr for WorkspaceIdentifierWithSpecial {
+        type Err = String;
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            let default_error:Result<WorkspaceIdentifierWithSpecial, String>= Err(format!("{} is not a valid workspace identifier.",s));
+            match s {
+                "previous" => return Ok(WorkspaceIdentifierWithSpecial::Previous),
+                "empty" => return Ok(WorkspaceIdentifierWithSpecial::Empty),
+                _ => {
+                    if let Some(first_char) = s.chars().collect::<Vec<char>>().get(0) {
+                        match first_char {
+                            '0'..='9' => {
+                                if let Ok(id) = s.parse::<i32>() {
+                                    if id > 0 && id < i32::MAX {
+                                        return Ok(WorkspaceIdentifierWithSpecial::Id(id));
+                                    } else {
+                                        return Err(
+                                            "workspace id must be between 0 and 9223372036854775806"
+                                                .to_string(),
+                                        );
+                                    }
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                            '+' | '-' => {
+                                if let Ok(num) = s.parse::<i32>() {
+                                    return Ok(WorkspaceIdentifierWithSpecial::Relative(num));
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                            'm' => {
+                                if s.len() < 3 {
+                                    return default_error;
+                                }
+                                if let Ok(num) = s[1..].parse::<i32>() {
+                                    return Ok(WorkspaceIdentifierWithSpecial::RelativeMonitor(num));
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                            'r' => {
+                                if s.len() < 3 {
+                                    return default_error;
+                                }
+                                if let Ok(num) = s[1..].parse::<i32>() {
+                                    return Ok(WorkspaceIdentifierWithSpecial::RelativeMonitorIncludingEmpty(num));
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                            'e' => {
+                                if s.len() < 3 {
+                                    return default_error;
+                                }
+                                if let Ok(num) = s[1..].parse::<i32>() {
+                                    return Ok(WorkspaceIdentifierWithSpecial::RelativeOpen(num));
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                            _ => {
+                                if s.starts_with("name:") {
+                                    let name = &s[5..];
+                                    return Ok(WorkspaceIdentifierWithSpecial::Name(name.to_string()));
+                                } else if s.starts_with("special") {
+                                    if s == "special" || s == "special:" {
+                                        return Ok(WorkspaceIdentifierWithSpecial::Special(None));
+                                    }
+                                    if s.len() < 8 {
+                                        return default_error;
+                                    }
+                                    let name = &s[8..];
+                                    return Ok(WorkspaceIdentifierWithSpecial::Special(Some(name.to_string())))
+                                } else {
+                                    return default_error;
+                                }
+                            }
+                        }
+                    } else {
+                        return Err("you need to provide a workspace".to_string());
+                    }
+                }
+            }
+        }
+    }
+    
+    impl TryInto<WorkspaceIdentifier> for &WorkspaceIdentifierWithSpecial{
+        type Error = String;
+        fn try_into(self) -> Result<WorkspaceIdentifier, Self::Error> {
+            match self {
+                WorkspaceIdentifierWithSpecial::Id(v) => Ok(WorkspaceIdentifier::Id(*v)),
+                WorkspaceIdentifierWithSpecial::Relative(v) => Ok(WorkspaceIdentifier::Relative(*v)),
+                WorkspaceIdentifierWithSpecial::RelativeMonitor(v) => Ok(WorkspaceIdentifier::RelativeMonitor(*v)),
+                WorkspaceIdentifierWithSpecial::RelativeMonitorIncludingEmpty(v) => Ok(WorkspaceIdentifier::RelativeMonitorIncludingEmpty(*v)),
+                WorkspaceIdentifierWithSpecial::RelativeOpen(v) => Ok(WorkspaceIdentifier::RelativeOpen(*v)),
+                WorkspaceIdentifierWithSpecial::Previous => Ok(WorkspaceIdentifier::Previous),
+                WorkspaceIdentifierWithSpecial::Empty => Ok(WorkspaceIdentifier::Empty),
+                WorkspaceIdentifierWithSpecial::Name(v) => Ok(WorkspaceIdentifier::Name(v.clone())),
+                WorkspaceIdentifierWithSpecial::Special(_) => Err("cannot convert special workspace".to_string()),
+            }
+        }
+    }
+
 /// This enum is the params to MoveWindow dispatcher
 #[derive(Debug, Clone)]
-pub enum WindowMove<'a> {
+pub enum WindowMove {
     /// Moves the window to a specified monitor
-    Monitor(MonitorIdentifier<'a>),
+    Monitor(MonitorIdentifier),
     /// Moves the window in a specified direction
     Direction(Direction),
 }
@@ -268,16 +512,16 @@ pub enum DispatchType<'a> {
     /// This dispatcher closes the specified window
     CloseWindow(WindowIdentifier<'a>),
     /// This dispatcher changes the current workspace
-    Workspace(WorkspaceIdentifierWithSpecial<'a>),
+    Workspace(WorkspaceIdentifierWithSpecial),
     /// This dispatcher moves a window (focused if not specified) to a workspace
     MoveToWorkspace(
-        WorkspaceIdentifierWithSpecial<'a>,
+        WorkspaceIdentifierWithSpecial,
         Option<WindowIdentifier<'a>>,
     ),
     /// This dispatcher moves a window (focused if not specified) to a workspace, without switching to that
     /// workspace
     MoveToWorkspaceSilent(
-        WorkspaceIdentifierWithSpecial<'a>,
+        WorkspaceIdentifierWithSpecial,
         Option<WindowIdentifier<'a>>,
     ),
     /// This dispatcher floats a window (current if not specified)
@@ -296,7 +540,7 @@ pub enum DispatchType<'a> {
     /// This dispatcher moves the window focus in a specified direction
     MoveFocus(Direction),
     /// This dispatcher moves the current window to a monitor or in a specified direction
-    MoveWindow(WindowMove<'a>),
+    MoveWindow(WindowMove),
     /// This dispatcher centers the active window
     CenterWindow,
     /// This dispatcher resizes the active window using a [`Position`][Position] enum
@@ -316,7 +560,7 @@ pub enum DispatchType<'a> {
     /// This dispatcher focuses a specified window
     FocusWindow(WindowIdentifier<'a>),
     /// This dispatcher focuses a specified monitor
-    FocusMonitor(MonitorIdentifier<'a>),
+    FocusMonitor(MonitorIdentifier),
     /// This dispatcher changed the split ratio
     ChangeSplitRatio(f32),
     /// This dispatcher toggle opacity for the current window/client
@@ -335,11 +579,11 @@ pub enum DispatchType<'a> {
     /// This dispatcher forces the renderer to reload
     ForceRendererReload,
     /// This dispatcher moves the current workspace to a specified monitor
-    MoveCurrentWorkspaceToMonitor(MonitorIdentifier<'a>),
+    MoveCurrentWorkspaceToMonitor(MonitorIdentifier),
     /// This dispatcher moves a specified workspace to a specified monitor
-    MoveWorkspaceToMonitor(WorkspaceIdentifier<'a>, MonitorIdentifier<'a>),
+    MoveWorkspaceToMonitor(WorkspaceIdentifier, MonitorIdentifier),
     /// This dispatcher swaps the active workspaces of two monitors
-    SwapActiveWorkspaces(MonitorIdentifier<'a>, MonitorIdentifier<'a>),
+    SwapActiveWorkspaces(MonitorIdentifier, MonitorIdentifier),
     /// This dispatcher brings the active window to the top of the stack
     BringActiveToTop,
     /// This toggles the special workspace (AKA scratchpad)
